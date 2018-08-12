@@ -1,0 +1,10 @@
+chatterbot
+
+markovify
+
+tensorflow
+keras
+
+nltk
+spacy
+gensim
