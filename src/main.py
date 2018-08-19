@@ -10,7 +10,7 @@ from keras.models import Sequential, load_model
 from keras.optimizers import Adam
 from markovify import Chain
 from markovify import Text as MarkovText
-from nltk.tokenize import sent_tokenize
+from nltk.tokenize import sent_tokenize, word_tokenize
 
 nlp = spacy.load("en")
 
@@ -30,7 +30,7 @@ class Bottimus(MarkovText):
 
     def __init__(
         self,
-        input_text: str = None,
+        input_text: list(str) = None,
         state_size: int = 2,
         chain: Chain = None,
         retain_original: bool = True,
@@ -59,14 +59,19 @@ class Bottimus(MarkovText):
 
         MarkovText.__init__(
             self,
-            input_text,
+            self.sentence_join(input_text),
             state_size=state_size,
             chain=chain,
             retain_original=retain_original,
         )
 
         if input_text:
-            corpus = self.generate_corpus(input_text)
+            corpus = []
+            for index, sentence in enumerate(input_text):
+                if index % 2 == 0:
+                    corpus.append(word_tokenize(sentence))
+                else:
+                    corpus.append([word.lemma_ for word in nlp(sentence)])
             self.word_vectors = self.compile_word2vec(corpus)
             self.lstm = self.compile_lstm(corpus)
         else:
