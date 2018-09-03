@@ -43,11 +43,13 @@ class Bottimus(MarkovText):
         **kwargs: dict,
     ):
         # Defaults
-        kwargs.update({"word_vector_size": 300, "min_count": 5, "max_vocab_size": None})
+        kwargs.update(
+            {"word_vector_size": 300, "min_count": 5, "max_vocab_size": 40000000}
+        )
 
         self.nlp = spacy.load("en")
 
-        corpus = map(self.word_split, responder_text)
+        corpus = list(map(self.word_split, responder_text))
 
         # Chain
         if (not chain) or isinstance(chain, dict):
@@ -58,7 +60,7 @@ class Bottimus(MarkovText):
                 self,
                 None,
                 state_size=chain["state_size"],
-                parsed_sentences=corpus + self.generate_corpus(generator_text),
+                parsed_sentences=corpus + list(self.generate_corpus(generator_text)),
                 retain_original=chain["retain_original"],
             )
         else:
@@ -107,7 +109,7 @@ class Bottimus(MarkovText):
                 window=word_vectors["window"],
                 min_count=kwargs["min_count"],
                 workers=word_vectors["workers"],
-                max_final_vocab=kwargs["vocab_size"],
+                max_vocab_size=kwargs["max_vocab_size"],
             ).wv
         else:
             self.word_vectors = word_vectors
@@ -116,7 +118,6 @@ class Bottimus(MarkovText):
         if (not lstm) or isinstance(lstm, dict):
             default = {
                 "lstm_layers": 3,
-                "lstm_nodes": 256,
                 "max_words": 100,
                 "activation": "sigmoid",
                 "dropout_rate": .2,
@@ -131,10 +132,8 @@ class Bottimus(MarkovText):
                 self.lstm.add(
                     Bidirectional(
                         LSTM(
-                            lstm["lstm_nodes"],
-                            input_length=lstm["max_words"],
-                            input_dim=kwargs["word_vector_size"],
-                            output_dim=kwargs["word_vector_size"],
+                            kwargs["word_vector_size"],
+                            input_shape=(lstm["max_words"], kwargs["word_vector_size"]),
                             activation=lstm["activation"],
                             dropout=lstm["dropout_rate"],
                             # init="glorot_normal",
