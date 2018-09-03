@@ -29,9 +29,9 @@ class Bottimus(MarkovText):
     def __init__(
         self,
         # Data
-        generator_text: Union[str, list(str)] = None,
-        responder_text: list(str) = None,
-        command_text: list(str) = None,
+        generator_text: Union[str, list] = None,
+        responder_text: list = None,
+        command_text: list = None,
         grammar: Union[dict, Grammar] = None,
         # Models
         chain: Union[dict, MarkovText] = None,
@@ -178,12 +178,12 @@ class Bottimus(MarkovText):
         else:
             self.grammar = grammar
 
-    def sentence_split(self, text: str) -> list(str):
+    def sentence_split(self, text: str) -> list:
         return sent_tokenize(text)
 
     separator: str = "::"
 
-    def word_split(self, sentence: str, pos: bool = True) -> list(str):
+    def word_split(self, sentence: str, pos: bool = True) -> list:
         if pos:
             tokens = []
             for token in self.nlp(
@@ -200,7 +200,7 @@ class Bottimus(MarkovText):
             tokens = word_tokenize(sentence)
         return tokens
 
-    def word_join(self, words: list(str), pos: bool = True) -> str:
+    def word_join(self, words: list, pos: bool = True) -> str:
         if pos:
             sentence = " ".join(word.split(self.separator)[0] for word in words)
         else:
