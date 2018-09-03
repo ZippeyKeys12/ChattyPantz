@@ -7,8 +7,9 @@ import spacy
 from chatterbot import ChatBot
 from gensim.models import FastText, KeyedVectors, Phrases, Word2Vec
 from gensim.models.phrases import Phraser
-from keras.layers import LSTM, Bidirectional
-from keras.models import Sequential, load_model
+from keras.initializers import lecun_uniform
+from keras.layers import GRU, LSTM, Bidirectional, Dense, Input, concatenate
+from keras.models import Model, load_model
 from keras.optimizers import Adam
 from markovify import Chain
 from markovify import Text as MarkovText
@@ -37,14 +38,14 @@ class Bottimus(MarkovText):
         chain: Union[dict, MarkovText] = None,
         phraser: Union[dict, Phraser] = None,
         word_vectors: Union[dict, KeyedVectors] = None,
-        lstm: Union[dict, Sequential] = None,
+        nn: Union[dict, Model] = None,
         # Chatterbot
         commander: ChatBot = None,
         **kwargs: dict,
     ):
         # Defaults
         kwargs.update(
-            {"word_vector_size": 300, "min_count": 5, "max_vocab_size": 40000000}
+            {"word_vector_size": 256, "min_count": 5, "max_vocab_size": 40000000}
         )
 
         self.nlp = spacy.load("en")
@@ -107,7 +108,7 @@ class Bottimus(MarkovText):
                 corpus,
                 size=kwargs["word_vector_size"],
                 window=word_vectors["window"],
-                min_count=kwargs["min_count"],
+                min_count=1,  # kwargs["min_count"],
                 workers=word_vectors["workers"],
                 max_vocab_size=kwargs["max_vocab_size"],
             ).wv
@@ -115,41 +116,74 @@ class Bottimus(MarkovText):
             self.word_vectors = word_vectors
 
         # LSTM RNN
-        if (not lstm) or isinstance(lstm, dict):
+        if (not nn) or isinstance(nn, dict):
             default = {
-                "lstm_layers": 3,
+                "cell_type": "LSTM",
+                # "num_layers": 3,
                 "max_words": 100,
-                "activation": "sigmoid",
+                "sentence_vector_size": 300,
+                "activation": "tanh",
                 "dropout_rate": .2,
-                "loss": "cosine_proximity",
-                "learning_rate": .1,
+                "loss": "categorical_crossentropy",
+                "learning_rate": .00005,
                 "metrics": ["accuracy"],
             }
-            lstm = (lstm and lstm.update(default)) or default
+            nn = (nn and nn.update(default)) or default
 
-            self.lstm = Sequential()
-            for _ in range(lstm["lstm_layers"]):
-                self.lstm.add(
-                    Bidirectional(
-                        LSTM(
-                            kwargs["word_vector_size"],
-                            input_shape=(lstm["max_words"], kwargs["word_vector_size"]),
-                            activation=lstm["activation"],
-                            dropout=lstm["dropout_rate"],
-                            # init="glorot_normal",
-                            # inner_init="glorot_normal",
-                            return_sequences=True,
+            input_statement = Input(
+                shape=(nn["max_words"], kwargs["word_vector_size"]),
+                name="input_statement",
+            )
+            input_response = Input(
+                shape=(nn["max_words"], kwargs["word_vector_size"]),
+                name="input_response",
+            )
+
+            self.nn = Model(
+                input=[input_statement, input_response],
+                output=[
+                    Dense(kwargs["max_vocab_size"], activation="softmax")(
+                        Dense(kwargs["max_vocab_size"] / 2, activation="relu")(
+                            concatenate(
+                                [
+                                    Bidirectional(
+                                        {"LSTM": LSTM, "GRU": GRU}[nn["cell_type"]](
+                                            units=nn["sentence_vector_size"],
+                                            input_shape=(
+                                                nn["max_words"],
+                                                kwargs["word_vector_size"],
+                                            ),
+                                            activation=nn["activation"],
+                                            dropout=nn["dropout_rate"],
+                                            init=lecun_uniform(),
+                                        )
+                                    )(input_statement),
+                                    Bidirectional(
+                                        {"LSTM": LSTM, "GRU": GRU}[nn["cell_type"]](
+                                            units=nn["sentence_vector_size"],
+                                            input_shape=(
+                                                nn["max_words"],
+                                                kwargs["word_vector_size"],
+                                            ),
+                                            activation=nn["activation"],
+                                            dropout=nn["dropout_rate"],
+                                            kernel_initializer=lecun_uniform(),
+                                        )
+                                    )(),
+                                ],
+                                axis=1,
+                            )
                         )
                     )
-                )
-            # model.add(Dense(vocab_size))
-            self.lstm.compile(
-                loss=lstm["loss"],
-                optimizer=Adam(lr=lstm["learning_rate"]),
-                metrics=lstm["metrics"],
+                ],
+            )
+            self.nn.compile(
+                loss=nn["loss"],
+                optimizer=Adam(lr=nn["learning_rate"]),
+                metrics=nn["metrics"],
             )
         else:
-            self.lstm = lstm
+            self.nn = nn
 
         # Commander
         self.commander = commander or ChatBot(
