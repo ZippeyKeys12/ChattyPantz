@@ -7,10 +7,10 @@ import spacy
 from chatterbot import ChatBot
 from gensim.models import FastText, KeyedVectors, Phrases, Word2Vec
 from gensim.models.phrases import Phraser
-from keras.initializers import lecun_uniform
-from keras.layers import GRU, LSTM, Bidirectional, Dense, Input, concatenate
-from keras.models import Model, load_model
-from keras.optimizers import Adam
+from tensorflow.keras.initializers import lecun_uniform
+from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Input, concatenate
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.optimizers import Adam
 from markovify import Chain
 from markovify import Text as MarkovText
 from nltk.tokenize import sent_tokenize, word_tokenize
@@ -108,7 +108,7 @@ class Bottimus(MarkovText):
                 corpus,
                 size=kwargs["word_vector_size"],
                 window=word_vectors["window"],
-                min_count=1,  # kwargs["min_count"],
+                min_count=kwargs["min_count"],
                 workers=word_vectors["workers"],
                 max_vocab_size=kwargs["max_vocab_size"],
             ).wv
@@ -119,7 +119,7 @@ class Bottimus(MarkovText):
         if (not nn) or isinstance(nn, dict):
             default = {
                 "cell_type": "LSTM",
-                # "num_layers": 3,
+                # "num_layers": 3, Perhaps later
                 "max_words": 100,
                 "sentence_vector_size": 300,
                 "activation": "tanh",
@@ -140,8 +140,8 @@ class Bottimus(MarkovText):
             )
 
             self.nn = Model(
-                input=[input_statement, input_response],
-                output=[
+                inputs=[input_statement, input_response],
+                outputs=[
                     Dense(kwargs["max_vocab_size"], activation="softmax")(
                         Dense(kwargs["max_vocab_size"] / 2, activation="relu")(
                             concatenate(
@@ -155,7 +155,7 @@ class Bottimus(MarkovText):
                                             ),
                                             activation=nn["activation"],
                                             dropout=nn["dropout_rate"],
-                                            init=lecun_uniform(),
+                                            kernel_initializer=lecun_uniform(),
                                         )
                                     )(input_statement),
                                     Bidirectional(
@@ -169,7 +169,7 @@ class Bottimus(MarkovText):
                                             dropout=nn["dropout_rate"],
                                             kernel_initializer=lecun_uniform(),
                                         )
-                                    )(),
+                                    )(input_response),
                                 ],
                                 axis=1,
                             )
