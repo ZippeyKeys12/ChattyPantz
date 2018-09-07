@@ -7,13 +7,13 @@ import spacy
 from chatterbot import ChatBot
 from gensim.models import FastText, KeyedVectors, Phrases, Word2Vec
 from gensim.models.phrases import Phraser
+from markovify import Chain
+from markovify import Text as MarkovText
+from nltk.tokenize import sent_tokenize, word_tokenize
 from tensorflow.keras.initializers import lecun_uniform
 from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Input, concatenate
 from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
-from markovify import Chain
-from markovify import Text as MarkovText
-from nltk.tokenize import sent_tokenize, word_tokenize
 from tracery import Grammar
 from tracery.modifiers import base_english
 
@@ -54,8 +54,9 @@ class Bottimus(MarkovText):
 
         # Chain
         if (not chain) or isinstance(chain, dict):
-            default = {"state_size": 2, "retain_original": True}
-            chain = (chain and chain.update(default)) or default
+            chain = chain or {}
+            for Key, Value in {"state_size": 2, "retain_original": True}.items():
+                chain.setdefault(Key, Value)
 
             MarkovText.__init__(
                 self,
@@ -80,8 +81,9 @@ class Bottimus(MarkovText):
 
         # Phraser
         if (not phraser) or isinstance(phraser, dict):
-            default = {"gram_size": 3, "scoring": "default"}
-            phraser = (phraser and phraser.update(default)) or default
+            phraser = phraser or {}
+            for Key, Value in {"gram_size": 3, "scoring": "default"}.items():
+                phraser.setdefault(Key, Value)
 
             for _ in range(phraser["gram_size"]):
                 self.phraser = Phraser(
@@ -99,8 +101,13 @@ class Bottimus(MarkovText):
 
         # Word Vectors
         if (not word_vectors) or isinstance(word_vectors, dict):
-            default = {"embedding_model": "fasttext", "window": 5, "workers": 3}
-            word_vectors = (word_vectors and word_vectors.update(default)) or default
+            word_vectors = word_vectors or {}
+            for Key, Value in {
+                "embedding_model": "fasttext",
+                "window": 5,
+                "workers": 3,
+            }.items():
+                word_vectors.setdefault(Key, Value)
 
             self.word_vectors = {"fasttext": FastText, "word2vec": Word2Vec}[
                 word_vectors["embedding_model"].lower()
@@ -108,7 +115,7 @@ class Bottimus(MarkovText):
                 corpus,
                 size=kwargs["word_vector_size"],
                 window=word_vectors["window"],
-                min_count=kwargs["min_count"],
+                min_count=1,  # kwargs["min_count"],
                 workers=word_vectors["workers"],
                 max_vocab_size=kwargs["max_vocab_size"],
             ).wv
@@ -117,7 +124,8 @@ class Bottimus(MarkovText):
 
         # LSTM RNN
         if (not nn) or isinstance(nn, dict):
-            default = {
+            nn = nn or {}
+            for Key, Value in {
                 "cell_type": "LSTM",
                 # "num_layers": 3, Perhaps later
                 "max_words": 100,
@@ -125,10 +133,10 @@ class Bottimus(MarkovText):
                 "activation": "tanh",
                 "dropout_rate": .2,
                 "loss": "categorical_crossentropy",
-                "learning_rate": .00005,
+                "learning_rate": .0005,
                 "metrics": ["accuracy"],
-            }
-            nn = (nn and nn.update(default)) or default
+            }.items():
+                nn.setdefault(Key, Value)
 
             input_statement = Input(
                 shape=(nn["max_words"], kwargs["word_vector_size"]),
@@ -187,7 +195,12 @@ class Bottimus(MarkovText):
 
         # Commander
         self.commander = commander or ChatBot(
-            "Command",
+            "Commander",
+            preprocessors=[
+                "chatterbot.preprocessors.clean_whitespace",
+                "chatterbot.preprocessors.convert_to_ascii",
+            ],
+            trainer="chatterbot.trainers.ListTrainer",
             logic_adapters=[
                 {"import_path": "chatterbot.logic.BestMatch"},
                 {
@@ -197,14 +210,14 @@ class Bottimus(MarkovText):
                 },
             ],
         )
-
         if command_text:
             self.commander.train(command_text)
 
         # Grammar
         if (not grammar) or isinstance(grammar, dict):
-            default = {}
-            grammar = (grammar and grammar.update(default)) or default
+            grammar = grammar or {}
+            for Key, Value in {}.items():
+                grammar.setdefault(Key, Value)
 
             self.grammar = Grammar(grammar)
             self.grammar.add_modifiers(base_english)
@@ -246,15 +259,15 @@ class Bottimus(MarkovText):
         self, statement: str = None, init_state=None, **kwargs: dict
     ) -> str:
         if statement:
-            response = self.commander.get_response(statement)
-            if response is not "FAIL":
-                if self.rule_pattern.search(response):
-                    return self.grammar.flatten(response)
-                else:
-                    return response
+            response = str(self.commander.get_response(statement))
+            if response == "FAIL":
+                return "NI YET"
         else:
-            return MarkovText.make_sentence(self, init_state=init_state, kwargs=kwargs)
+            response = MarkovText.make_sentence(
+                self, init_state=init_state, kwargs=kwargs
+            )
+        return self.grammar.flatten(response)
 
     def save(self, filename: str) -> None:
         with open(filename, "wb") as f:
-            pickle.dumps(self, f)
+            pickle.dump(self, f)
