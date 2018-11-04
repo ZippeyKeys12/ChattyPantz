@@ -1,7 +1,7 @@
 import os
 import pickle
 import re
-from typing import Union
+from typing import Dict, List, Union
 
 import spacy
 from chatterbot import ChatBot
@@ -30,18 +30,18 @@ class Bottimus(MarkovText):
     def __init__(
         self,
         # Data
-        generator_text: Union[str, list] = None,
-        responder_text: list = None,
-        command_text: list = None,
-        grammar: Union[dict, Grammar] = None,
+        generator_text: Union[str, List[str]] = None,
+        responder_text: List[str] = None,
+        command_text: List[str] = None,
+        grammar: Union[Dict[str, str], Grammar] = None,
         # Models
-        chain: Union[dict, MarkovText] = None,
-        phraser: Union[dict, Phraser] = None,
-        word_vectors: Union[dict, KeyedVectors] = None,
-        nn: Union[dict, Model] = None,
+        chain: Union[Dict[str], MarkovText] = None,
+        phraser: Union[Dict[str], Phraser] = None,
+        word_vectors: Union[Dict[str], KeyedVectors] = None,
+        nn: Union[Dict[str], Model] = None,
         # Chatterbot
         commander: ChatBot = None,
-        **kwargs: dict,
+        **kwargs: Dict[str, int],
     ):
         # Defaults
         kwargs.update(
@@ -229,7 +229,7 @@ class Bottimus(MarkovText):
 
     separator: str = "::"
 
-    def word_split(self, sentence: str, pos: bool = True) -> list:
+    def word_split(self, sentence: str, pos: bool = True) -> List[str]:
         if pos:
             tokens = []
             for token in self.nlp(
@@ -246,7 +246,7 @@ class Bottimus(MarkovText):
             tokens = word_tokenize(sentence)
         return tokens
 
-    def word_join(self, words: list, pos: bool = True) -> str:
+    def word_join(self, words: List[str], pos: bool = True) -> str:
         if pos:
             sentence = " ".join(word.split(self.separator)[0] for word in words)
         else:
